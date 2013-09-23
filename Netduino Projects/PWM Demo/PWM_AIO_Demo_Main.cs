@@ -14,12 +14,39 @@ using SecretLabs.NETMF.Hardware.Netduino;
  */
 namespace NetduinoApplication1
 {
+
+    public class AnalogReadClass
+    {
+         public double potValue = 0.0;
+
+        AnalogInput pot = new AnalogInput(AnalogChannels.ANALOG_PIN_A0);
+
+        public void ReadAndSetPWM()
+        {
+            pot.Scale = 1;
+            while(true)
+            {
+                potValue = pot.Read();
+          
+            }
+        }
+
+       
+    }
+
     public class PWM_AIO_Demo_Main
     {
         static PWM led;
         public static void Main()
         {
   
+            AnalogReadClass ARclass = new AnalogReadClass();
+
+            Thread analogReadTask = new Thread(new ThreadStart(ARclass.ReadAndSetPWM));
+            analogReadTask.Start();
+
+            while (!analogReadTask.IsAlive) ;
+
             double freq = 50.0;
             double duty = .5;
 
@@ -27,14 +54,17 @@ namespace NetduinoApplication1
             OutputPort onboardLed = new OutputPort(Pins.ONBOARD_LED, false);
 
             led = new PWM(PWMChannels.PWM_PIN_D5, freq, duty ,false);
-            AnalogInput  pot = new AnalogInput(AnalogChannels.ANALOG_PIN_A0);
+           
 
-            double potValue = 0.0;
+
             led.Frequency = 1000;
             led.DutyCycle = .5;
             led.Start();
 
-            pot.Scale = 1;
+
+
+
+            double startValue = 0;
 
             while (true)
             {
@@ -43,12 +73,30 @@ namespace NetduinoApplication1
                 Thread.Sleep(250);
                 onboardLed.Write(false);
                 Thread.Sleep(250); */
-                potValue = pot.Read();
+
+                startValue += .5 * ARclass.potValue;
+
+                if (startValue > 2 * System.Math.PI )
+                {
+                    startValue = 0;
+                }
+                Thread.Sleep(5);
+
+
+                led.DutyCycle = System.Math.Max(0, System.Math.Sin(startValue));
+
+
+          /*      for (startValue = 4.712; startValue < 10.995; startValue += 0.1)
+                {
+                    endValue = System.Math.Sin(startValue) * ARclass.potValue + .5;
+                    led.DutyCycle = endValue;
+                    Thread.Sleep(5);
+                    if (startValue == 4.712)
+                    {
+                        Thread.Sleep(1000);
+                    }
+                }*/
                 
-
-                led.DutyCycle = potValue;
-
-
             }
 
         }
