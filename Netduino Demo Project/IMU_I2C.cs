@@ -7,22 +7,27 @@ using Toolbox.NETMF.Hardware;
 /*
  * Driver for MPU-6050 3 axis gyro/accy over i2c interface
  * 
- * Source : https://github.com/jrowberg/i2cdevlib/tree/master/Arduino/MPU6050
+ * Sources : https://github.com/jrowberg/i2cdevlib/tree/master/Arduino/MPU6050
  * http://forums.netduino.com/index.php?/topic/9185-mpu6050-with-netduino/
+ * http://www.botched.co.uk/pic-tutorials/mpu6050-setup-data-aquisition/
  */
 namespace NetduinoApplication1
 {
+
+    /// <summary>
+    /// Upon construction, converts given buffer and offset into raw format gyro and accelerometer values
+    /// </summary>
     public class SensorData
     {
         public double Acceleration_X = 0;
         public double Acceleration_Y = 0;
         public double Acceleration_Z = 0;
-     public double Temperature = 0;
+        public double Temperature = 0;
 
         public double Gyroscope_X = 0;
         public double Gyroscope_Y = 0;
         public double Gyroscope_Z = 0;
-   
+
 
         public SensorData(byte[] buffer, Int16[] GyroOffsets, bool normalize)
         {
@@ -31,18 +36,6 @@ namespace NetduinoApplication1
             Acceleration_Y = (Int16)((((UInt16)buffer[2]) << 8) | buffer[3]);
             Acceleration_Z = (Int16)((((UInt16)buffer[4]) << 8) | buffer[5]);
 
-            double magnitude;
-
-            if (normalize)
-            {
-                 magnitude = System.Math.Sqrt(System.Math.Pow((double)Acceleration_X, 2.0) + System.Math.Pow((double)Acceleration_Y, 2.0) + System.Math.Pow((double)Acceleration_Z, 2.0));
-
-                Acceleration_X /= magnitude;
-                Acceleration_Y /= magnitude;
-                Acceleration_Z /= magnitude;
-            }
-
-
             // Restult of temperature
             Temperature = (Int16)((((UInt16)buffer[6]) << 8) | buffer[7]);
 
@@ -50,20 +43,13 @@ namespace NetduinoApplication1
             Gyroscope_X = (Int16)((((UInt16)buffer[8]) << 8) | buffer[9]) - GyroOffsets[0];
             Gyroscope_Y = (Int16)((((UInt16)buffer[10]) << 8) | buffer[11]) - GyroOffsets[1];
             Gyroscope_Z = (Int16)((((UInt16)buffer[12]) << 8) | buffer[13]) - GyroOffsets[2];
-
-
-            if (normalize)
-            {
-                magnitude = System.Math.Sqrt(System.Math.Pow((double)Gyroscope_X, 2.0) + System.Math.Pow((double)Gyroscope_Y, 2.0) + System.Math.Pow((double)Gyroscope_Z, 2.0));
-
-                Gyroscope_X /= magnitude;
-                Gyroscope_Y /= magnitude;
-                Gyroscope_Z /= magnitude;
-
-            }
         }
     }
 
+
+    /// <summary>
+    /// Encapsulates communication to MPU6050 IMU. Initializes and configures device.
+    /// </summary>
     class IMU_I2C
     {
 
@@ -78,6 +64,9 @@ namespace NetduinoApplication1
         int[] Gyrosums = new int[3];
 
 
+        /// <summary>
+        /// Sets gyro offset array based on average of many samples
+        /// </summary>
         private void Callibrate()
         {
             const Int16 AverageGyroBufferSize = 1000;
@@ -94,22 +83,25 @@ namespace NetduinoApplication1
                 Gyrosums[1] += (Int16)((UInt16)(gyro[2]) << 8 | gyro[3]);
                 Gyrosums[2] += (Int16)((UInt16)(gyro[4]) << 8 | gyro[5]);
 
-                Thread.Sleep(1);
-
+                Thread.Sleep(1); // Small delay to accumulate average over 1 second
             }
 
-            for (int i = 0 ; i < 3; i++)
+            for (int i = 0; i < 3; i++)
                 GyroOffsets[i] = (Int16)((double)Gyrosums[i] / (double)AverageGyroBufferSize);
-            
 
             Debug.Print("Offset X " + GyroOffsets[0].ToString());
             Debug.Print("Offset Y " + GyroOffsets[1].ToString());
             Debug.Print("Offset Z " + GyroOffsets[2].ToString());
         }
 
+
+        /// <summary>
+        /// Writes hardcoded initialization values to MPU. Then verifies set values.
+        /// Writes to console whether initialization passed or failed.
+        /// </summary>
         private void Initialize()
         {
-            //The following configuration is taken from http://www.botched.co.uk/pic-tutorials/mpu6050-setup-data-aquisition/
+            //The following configuration is taken from 
 
             UInt16[] InitializationTable = new UInt16[100];
 
@@ -182,6 +174,7 @@ namespace NetduinoApplication1
 
             int InitializationTableLength = 40;
 
+            bool InitializationFailure = false;
 
 
             //Note : comments mirrored from soruce
@@ -191,7 +184,8 @@ namespace NetduinoApplication1
             // The HEX value 0x6B is for the Power Management 1
             // The secound Hex value includes the 'Bit' for reset.
             _I2C.Write(new byte[] { MPU6050_RA_PWR_MGMT_1, 0x80 });
-            Thread.Sleep(10);
+
+            Thread.Sleep(30);
 
             _I2C.Write(new byte[] { MPU6050_RA_PWR_MGMT_2, 0x00 });
 
@@ -214,10 +208,13 @@ namespace NetduinoApplication1
             _I2C.WriteRead(new byte[] { MPU6050_RA_WHO_AM_I }, returnvalue);
 
             if (returnvalue[0] != Expected_I2C_Address)
+            {
                 Debug.Print("MPU-6050 Initialization failure. Returned : " + returnvalue[0].ToString());
+                InitializationFailure = true;
+            }
 
             //Write the initialization vector to the device
-            for (int i = 0; i < InitializationTableLength; i ++ )
+            for (int i = 0; i < InitializationTableLength; i++)
             {
                 UInt16 pair = InitializationTable[i];
                 //_I2C.Write(new UInt16[] { pair });
@@ -232,21 +229,27 @@ namespace NetduinoApplication1
             for (int i = 0; i < InitializationTableLength; i++)
             {
                 UInt16 pair = InitializationTable[i];
-                UInt16 [] ret = new UInt16 [1];
+                Thread.Sleep(1);
 
-                //Todo, sanity check results differ between byte pair and UInt16 representation
-                //need to figure out why
-                //_I2C.WriteRead(new byte[] { (byte)(pair >> 8), (byte)(pair & 0x0F) }, returnvalue);
-                _I2C.WriteRead(new ushort[] { pair }, ret);
-                if ((pair & 0x0F) != (ret[0]))
-                    Debug.Print("MPU6050 Initialization Sanity Check Fail: 0x" + (pair).ToString("X4") + " was read as 0x" + ret[0].ToString("X4"));
+                _I2C.WriteRead(new byte[] { (byte)(pair >> 8) }, returnvalue);
+                if ((pair & 0x0F) != (returnvalue[0]))
+                {
+                    Debug.Print("MPU6050 Initialization Sanity Check Fail: 0x" + (pair).ToString("X4") + " was read as 0x" + returnvalue[0].ToString("X4"));
+                    InitializationFailure = true;
+                }
 
             }
 
-            Debug.Print("MPU6050 Setup Complete");
-
+            if (!InitializationFailure)
+                Debug.Print("MPU6050 Setup Complete");
+            else
+                Debug.Print("MPU6050 Setup Failed");
         }
 
+
+        /// <summary>
+        /// Establishes I2C connection to MPU6050, Initializes and gets Gyro offsets.
+        /// </summary>
         public IMU_I2C(byte address)
         {
             _I2C = new MultiI2C(address, MAX_FREQ);
@@ -256,36 +259,25 @@ namespace NetduinoApplication1
             Callibrate();
         }
 
-        public void write(byte val)
-        {
-        }
 
+        /// <summary>
+        /// Returns sensordata class containing most recent raw inertal data.
+        /// </summary>
         public SensorData getSensorData()
         {
-            byte[] inbuffer =  {MPU6050_RA_ACCEL_XOUT_H ,  MPU6050_RA_ACCEL_XOUT_L ,  MPU6050_RA_ACCEL_YOUT_H, MPU6050_RA_ACCEL_YOUT_L  ,
-                                 MPU6050_RA_ACCEL_ZOUT_H   , MPU6050_RA_ACCEL_ZOUT_L , MPU6050_RA_TEMP_OUT_H ,
-                                 MPU6050_RA_TEMP_OUT_L  , MPU6050_RA_GYRO_XOUT_H   , MPU6050_RA_GYRO_XOUT_L   ,
-                                 MPU6050_RA_GYRO_YOUT_H  , MPU6050_RA_GYRO_YOUT_L  , MPU6050_RA_GYRO_ZOUT_H  , MPU6050_RA_GYRO_ZOUT_L };
+            byte[] buffer = new byte[14];
+            buffer[0] = MPU6050_RA_ACCEL_XOUT_H;
 
-            byte[] outbuffer = new byte[inbuffer.Length];
 
             //Read the 14 bytes starting from this register: XH/L, YH/L, XY/L, TempH/L, GyroH/L(x,y,z)
+            _I2C.Write(new byte[] { buffer[0] });
+            _I2C.Read(buffer);
 
-
-            for (int i = 0; i < outbuffer.Length; i++)
-            {
-                byte [] outb = new byte [1];
-                _I2C.Write(new byte [] {inbuffer[i]});
-                _I2C.Read(outb);
-                outbuffer[i] = outb[0];
-
-            }
-
-            return new SensorData(outbuffer, GyroOffsets, false);
+            return new SensorData(buffer, GyroOffsets, false);
         }
 
 
-
+        # region AddressConstants
         public const byte MPU6050_ADDRESS_AD0_LOW = 0x68;
         public const byte MPU6050_ADDRESS_AD0_HIGH = 0x69;
         public const byte MPU6050_DEFAULT_ADDRESS = MPU6050_ADDRESS_AD0_LOW;
@@ -639,6 +631,7 @@ namespace NetduinoApplication1
         public const byte MPU6050_DMP_MEMORY_BANKS = 8;
         public const int MPU6050_DMP_MEMORY_BANK_SIZE = 256;
         public const byte MPU6050_DMP_MEMORY_CHUNK_SIZE = 16;
+        #endregion
     }
 
 

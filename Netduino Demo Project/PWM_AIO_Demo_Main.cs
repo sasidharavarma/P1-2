@@ -122,57 +122,23 @@ namespace NetduinoApplication1
 
             IMU_I2C imu = new IMU_I2C(IMU_I2C.MPU6050_DEFAULT_ADDRESS);
 
-
-            /* 
-             * Spawn task to poll DHT11 temp/humid sensor.
-             * This polling takes time and the quality of the hardware/driver mean the
-             * polling takes inconsistent amounts of time. Also, the read operation is
-             * subject to timeouts which should not be allowed to suspend other tasks.
-             * 
-             * Constructor accepts handle to LCD display 
-             */
-            const int readPeriod = 1000;
-            //Thread analogReadTask = new Thread(new ThreadStart(new AnalogReadClass(null, readPeriod).PollTempHumidity));
-            //analogReadTask.Start();
-
-            //Spin untill task spawn completes
-            //while (!analogReadTask.IsAlive) ;
-
-            //initialize PWM properties before handoff to forever loop
-            double freq = 1000;
-            double duty = .5;
-
-            OutputPort onboardLed = new OutputPort(Pins.ONBOARD_LED, false);
-            PWM led = new PWM(PWMChannels.PWM_PIN_D5, freq, duty, false);
-
-            //Another output port to drive transistor, which drives coil of relay.
-            OutputPort relay = new OutputPort(Pins.GPIO_PIN_D0, false);
-
-            //Starts pwm channel at initialized rate/duty
-            //Will be modified by pollwrite loop
-            led.Start();
-
-
             SensorData imuData =  imu.getSensorData();
+
+            bool onboardstate = false;
+            OutputPort onboardled = new OutputPort(Pins.ONBOARD_LED, onboardstate);
 
             while (true)
             {
                 Thread.Sleep(1);
                 imuData = imu.getSensorData();
+                onboardstate = !onboardstate;
+                onboardled.Write(onboardstate);
 
                 Debug.Print("X Y Z X' Y' Z' " + imuData.Gyroscope_X.ToString() + " " + imuData.Gyroscope_Y.ToString() + " " + imuData.Gyroscope_Z.ToString() + " " + imuData.Acceleration_X.ToString() + " " + imuData.Acceleration_Y.ToString() + " " + imuData.Acceleration_Z.ToString());
 
             }
 
-
-            //loop forever to get AIO value and set led pwm
-            //Also writes to LCD display providing LED frequency
-           // SinLEDLoop(pot, led, relay, null);
-
-
         }
-
-
 
 
         public static void Main()
