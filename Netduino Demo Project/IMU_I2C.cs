@@ -24,12 +24,12 @@ namespace NetduinoApplication1
         public double Gyroscope_Z = 0;
    
 
-        public SensorData(byte[] buffer, int[] GyroOffsets, bool normalize)
+        public SensorData(byte[] buffer, Int16[] GyroOffsets, bool normalize)
         {
             // Result of the acceleration axis
-            Acceleration_X = (Int16)((((uint)buffer[0]) << 8) | buffer[1]);  //field responds to breadboard longitudinal axis orientation
-            Acceleration_Y = (Int16)((((uint)buffer[2]) << 8) | buffer[3]);
-            Acceleration_Z = (Int16)((((uint)buffer[4]) << 8) | buffer[5]);
+            Acceleration_X = (Int16)((((UInt16)buffer[0]) << 8) | buffer[1]);  //field responds to breadboard longitudinal axis orientation
+            Acceleration_Y = (Int16)((((UInt16)buffer[2]) << 8) | buffer[3]);
+            Acceleration_Z = (Int16)((((UInt16)buffer[4]) << 8) | buffer[5]);
 
             double magnitude;
 
@@ -44,13 +44,12 @@ namespace NetduinoApplication1
 
 
             // Restult of temperature
-            Temperature = (Int16)((((uint)buffer[6]) << 8) | buffer[7]);
+            Temperature = (Int16)((((UInt16)buffer[6]) << 8) | buffer[7]);
 
             // Result of the gyroscope axis
-            //Note - the gyro offset was taken from another source suggestion, but i do not understand what is being done/bugged
-            Gyroscope_X = (Int16)((((uint)buffer[8]) << 8) | buffer[9]);// -GyroOffsets[0];
-            Gyroscope_Y = (Int16)((((uint)buffer[10]) << 8) | buffer[11]);// -GyroOffsets[1];
-            Gyroscope_Z = (Int16)((((uint)buffer[12]) << 8) | buffer[13]);// -GyroOffsets[2];
+            Gyroscope_X = (Int16)((((UInt16)buffer[8]) << 8) | buffer[9]) - GyroOffsets[0];
+            Gyroscope_Y = (Int16)((((UInt16)buffer[10]) << 8) | buffer[11]) - GyroOffsets[1];
+            Gyroscope_Z = (Int16)((((UInt16)buffer[12]) << 8) | buffer[13]) - GyroOffsets[2];
 
 
             if (normalize)
@@ -75,11 +74,13 @@ namespace NetduinoApplication1
 
         const byte Expected_I2C_Address = 0x68;
 
-        int[] GyroOffsets = new int[3];
+        Int16[] GyroOffsets = new Int16[3];
+        int[] Gyrosums = new int[3];
+
 
         private void Callibrate()
         {
-            const int AverageGyroBufferSize = 1000;
+            const Int16 AverageGyroBufferSize = 1000;
 
             for (int i = 0; i < AverageGyroBufferSize; i++)
             {
@@ -89,95 +90,95 @@ namespace NetduinoApplication1
                 _I2C.Write(new byte[] { MPU6050_RA_GYRO_XOUT_H });
                 _I2C.Read(gyro);
 
-                GyroOffsets[0] += ((gyro[0]) << 8 | gyro[1]);
-                GyroOffsets[1] += ((gyro[2]) << 8 | gyro[3]);
-                GyroOffsets[2] += ((gyro[4]) << 8 | gyro[5]);
+                Gyrosums[0] += (Int16)((UInt16)(gyro[0]) << 8 | gyro[1]);
+                Gyrosums[1] += (Int16)((UInt16)(gyro[2]) << 8 | gyro[3]);
+                Gyrosums[2] += (Int16)((UInt16)(gyro[4]) << 8 | gyro[5]);
 
                 Thread.Sleep(1);
 
             }
 
-            GyroOffsets[0] = GyroOffsets[0] / AverageGyroBufferSize;
-            GyroOffsets[1] = GyroOffsets[1] / AverageGyroBufferSize;
-            GyroOffsets[2] = GyroOffsets[2] / AverageGyroBufferSize;
+            for (int i = 0 ; i < 3; i++)
+                GyroOffsets[i] = (Int16)((double)Gyrosums[i] / (double)AverageGyroBufferSize);
+            
 
             Debug.Print("Offset X " + GyroOffsets[0].ToString());
             Debug.Print("Offset Y " + GyroOffsets[1].ToString());
             Debug.Print("Offset Z " + GyroOffsets[2].ToString());
         }
 
-        private void Initialzie()
+        private void Initialize()
         {
             //The following configuration is taken from http://www.botched.co.uk/pic-tutorials/mpu6050-setup-data-aquisition/
 
-            ushort[] InitializationTable = new ushort[100];
+            UInt16[] InitializationTable = new UInt16[100];
 
             //Data transfer to and from the FIFO buffer
-            InitializationTable[0] = (ushort)MPU6050_RA_FIFO_R_W << 8 | 0x00;
+            InitializationTable[0] = (UInt16)MPU6050_RA_FIFO_R_W << 8 | 0x00;
             //Sets sample rate to 8000/1+7 = 1000Hz
-            InitializationTable[1] = (ushort)MPU6050_RA_SMPLRT_DIV << 8 | 0x07;
+            InitializationTable[1] = (UInt16)MPU6050_RA_SMPLRT_DIV << 8 | 0x07;
             //Disable FSync, 256Hz DLPF
-            InitializationTable[2] = (ushort)MPU6050_RA_CONFIG << 8 | 0x00;
+            InitializationTable[2] = (UInt16)MPU6050_RA_CONFIG << 8 | 0x00;
             //Disable gyro self tests, scale of 500 degrees/s
-            InitializationTable[3] = (ushort)MPU6050_RA_GYRO_CONFIG << 8 | 0x08;
+            InitializationTable[3] = (UInt16)MPU6050_RA_GYRO_CONFIG << 8 | 0x08;
             //Disable accel self tests, scale of +-2g, no DHPF
-            InitializationTable[4] = (ushort)MPU6050_RA_ACCEL_CONFIG << 8 | 0x00;
+            InitializationTable[4] = (UInt16)MPU6050_RA_ACCEL_CONFIG << 8 | 0x00;
             //Freefall threshold of |0mg|
-            InitializationTable[5] = (ushort)MPU6050_RA_FF_THR << 8 | 0x00;
+            InitializationTable[5] = (UInt16)MPU6050_RA_FF_THR << 8 | 0x00;
             //Freefall duration limit of 0
-            InitializationTable[6] = (ushort)MPU6050_RA_FF_DUR << 8 | 0x00;
+            InitializationTable[6] = (UInt16)MPU6050_RA_FF_DUR << 8 | 0x00;
             //Motion threshold of 0mg
-            InitializationTable[7] = (ushort)MPU6050_RA_MOT_THR << 8 | 0x00;
+            InitializationTable[7] = (UInt16)MPU6050_RA_MOT_THR << 8 | 0x00;
             //Motion duration of 0s
-            InitializationTable[8] = (ushort)MPU6050_RA_MOT_DUR << 8 | 0x00;
+            InitializationTable[8] = (UInt16)MPU6050_RA_MOT_DUR << 8 | 0x00;
             //Zero motion threshold
-            InitializationTable[9] = (ushort)MPU6050_RA_ZRMOT_THR << 8 | 0x00;
+            InitializationTable[9] = (UInt16)MPU6050_RA_ZRMOT_THR << 8 | 0x00;
             //Zero motion duration threshold
-            InitializationTable[10] = (ushort)MPU6050_RA_ZRMOT_DUR << 8 | 0x00;
+            InitializationTable[10] = (UInt16)MPU6050_RA_ZRMOT_DUR << 8 | 0x00;
             //Disable sensor output to FIFO buffer
-            InitializationTable[11] = (ushort)MPU6050_RA_FIFO_EN << 8 | 0x00;
+            InitializationTable[11] = (UInt16)MPU6050_RA_FIFO_EN << 8 | 0x00;
 
             //AUX I2C setup
             //Sets AUX I2C to single master control, plus other config
-            InitializationTable[12] = (ushort)MPU6050_RA_I2C_MST_CTRL << 8 | 0x00;
+            InitializationTable[12] = (UInt16)MPU6050_RA_I2C_MST_CTRL << 8 | 0x00;
             //Setup AUX I2C slaves
-            InitializationTable[13] = (ushort)MPU6050_RA_I2C_SLV0_ADDR << 8 | 0x00;
-            InitializationTable[14] = (ushort)MPU6050_RA_I2C_SLV0_REG << 8 | 0x00;
-            InitializationTable[15] = (ushort)MPU6050_RA_I2C_SLV0_CTRL << 8 | 0x00;
-            InitializationTable[16] = (ushort)MPU6050_RA_I2C_SLV1_ADDR << 8 | 0x00;
-            InitializationTable[17] = (ushort)MPU6050_RA_I2C_SLV1_REG << 8 | 0x00;
-            InitializationTable[18] = (ushort)MPU6050_RA_I2C_SLV1_CTRL << 8 | 0x00;
-            InitializationTable[19] = (ushort)MPU6050_RA_I2C_SLV2_ADDR << 8 | 0x00;
-            InitializationTable[20] = (ushort)MPU6050_RA_I2C_SLV2_REG << 8 | 0x00;
-            InitializationTable[21] = (ushort)MPU6050_RA_I2C_SLV2_CTRL << 8 | 0x00;
-            InitializationTable[22] = (ushort)MPU6050_RA_I2C_SLV3_ADDR << 8 | 0x00;
-            InitializationTable[23] = (ushort)MPU6050_RA_I2C_SLV3_REG << 8 | 0x00;
-            InitializationTable[24] = (ushort)MPU6050_RA_I2C_SLV3_CTRL << 8 | 0x00;
-            InitializationTable[25] = (ushort)MPU6050_RA_I2C_SLV4_ADDR << 8 | 0x00;
-            InitializationTable[26] = (ushort)MPU6050_RA_I2C_SLV4_REG << 8 | 0x00;
-            InitializationTable[27] = (ushort)MPU6050_RA_I2C_SLV4_DO << 8 | 0x00;
-            InitializationTable[28] = (ushort)MPU6050_RA_I2C_SLV4_CTRL << 8 | 0x00;
-            InitializationTable[29] = (ushort)MPU6050_RA_I2C_SLV4_DI << 8 | 0x00;
+            InitializationTable[13] = (UInt16)MPU6050_RA_I2C_SLV0_ADDR << 8 | 0x00;
+            InitializationTable[14] = (UInt16)MPU6050_RA_I2C_SLV0_REG << 8 | 0x00;
+            InitializationTable[15] = (UInt16)MPU6050_RA_I2C_SLV0_CTRL << 8 | 0x00;
+            InitializationTable[16] = (UInt16)MPU6050_RA_I2C_SLV1_ADDR << 8 | 0x00;
+            InitializationTable[17] = (UInt16)MPU6050_RA_I2C_SLV1_REG << 8 | 0x00;
+            InitializationTable[18] = (UInt16)MPU6050_RA_I2C_SLV1_CTRL << 8 | 0x00;
+            InitializationTable[19] = (UInt16)MPU6050_RA_I2C_SLV2_ADDR << 8 | 0x00;
+            InitializationTable[20] = (UInt16)MPU6050_RA_I2C_SLV2_REG << 8 | 0x00;
+            InitializationTable[21] = (UInt16)MPU6050_RA_I2C_SLV2_CTRL << 8 | 0x00;
+            InitializationTable[22] = (UInt16)MPU6050_RA_I2C_SLV3_ADDR << 8 | 0x00;
+            InitializationTable[23] = (UInt16)MPU6050_RA_I2C_SLV3_REG << 8 | 0x00;
+            InitializationTable[24] = (UInt16)MPU6050_RA_I2C_SLV3_CTRL << 8 | 0x00;
+            InitializationTable[25] = (UInt16)MPU6050_RA_I2C_SLV4_ADDR << 8 | 0x00;
+            InitializationTable[26] = (UInt16)MPU6050_RA_I2C_SLV4_REG << 8 | 0x00;
+            InitializationTable[27] = (UInt16)MPU6050_RA_I2C_SLV4_DO << 8 | 0x00;
+            InitializationTable[28] = (UInt16)MPU6050_RA_I2C_SLV4_CTRL << 8 | 0x00;
+            InitializationTable[29] = (UInt16)MPU6050_RA_I2C_SLV4_DI << 8 | 0x00;
             //MPU6050_RA_I2C_MST_STATUS //Read-only
             //Setup INT pin and AUX I2C pass through
-            InitializationTable[30] = (ushort)MPU6050_RA_INT_PIN_CFG << 8 | 0x00;
+            InitializationTable[30] = (UInt16)MPU6050_RA_INT_PIN_CFG << 8 | 0x00;
             //Enable data ready interrupt
-            InitializationTable[31] = (ushort)MPU6050_RA_INT_ENABLE << 8 | 0x00;
+            InitializationTable[31] = (UInt16)MPU6050_RA_INT_ENABLE << 8 | 0x00;
 
 
             //Slave out, dont care
-            InitializationTable[32] = (ushort)MPU6050_RA_I2C_SLV0_DO << 8 | 0x00;
-            InitializationTable[33] = (ushort)MPU6050_RA_I2C_SLV1_DO << 8 | 0x00;
-            InitializationTable[34] = (ushort)MPU6050_RA_I2C_SLV2_DO << 8 | 0x00;
-            InitializationTable[35] = (ushort)MPU6050_RA_I2C_SLV3_DO << 8 | 0x00;
+            InitializationTable[32] = (UInt16)MPU6050_RA_I2C_SLV0_DO << 8 | 0x00;
+            InitializationTable[33] = (UInt16)MPU6050_RA_I2C_SLV1_DO << 8 | 0x00;
+            InitializationTable[34] = (UInt16)MPU6050_RA_I2C_SLV2_DO << 8 | 0x00;
+            InitializationTable[35] = (UInt16)MPU6050_RA_I2C_SLV3_DO << 8 | 0x00;
             //More slave config
-            InitializationTable[36] = (ushort)MPU6050_RA_I2C_MST_DELAY_CTRL << 8 | 0x00;
+            InitializationTable[36] = (UInt16)MPU6050_RA_I2C_MST_DELAY_CTRL << 8 | 0x00;
             //Reset sensor signal paths
-            InitializationTable[37] = (ushort)MPU6050_RA_SIGNAL_PATH_RESET << 8 | 0x00;
+            InitializationTable[37] = (UInt16)MPU6050_RA_SIGNAL_PATH_RESET << 8 | 0x00;
             //Motion detection control
-            InitializationTable[38] = (ushort)MPU6050_RA_MOT_DETECT_CTRL << 8 | 0x00;
+            InitializationTable[38] = (UInt16)MPU6050_RA_MOT_DETECT_CTRL << 8 | 0x00;
             //Disables FIFO, AUX I2C, FIFO and I2C reset bits to 0
-            InitializationTable[39] = (ushort)MPU6050_RA_USER_CTRL << 8 | 0x00;
+            InitializationTable[39] = (UInt16)MPU6050_RA_USER_CTRL << 8 | 0x00;
 
             int InitializationTableLength = 40;
 
@@ -218,8 +219,8 @@ namespace NetduinoApplication1
             //Write the initialization vector to the device
             for (int i = 0; i < InitializationTableLength; i ++ )
             {
-                ushort pair = InitializationTable[i];
-                //_I2C.Write(new ushort[] { pair });
+                UInt16 pair = InitializationTable[i];
+                //_I2C.Write(new UInt16[] { pair });
                 _I2C.Write(new byte[] { (byte)(pair >> 8), (byte)(pair & 0x0F) });
 
             }
@@ -230,9 +231,11 @@ namespace NetduinoApplication1
             //Verify assignments were sucessful
             for (int i = 0; i < InitializationTableLength; i++)
             {
-                ushort pair = InitializationTable[i];
-                ushort [] ret = new ushort [1];
+                UInt16 pair = InitializationTable[i];
+                UInt16 [] ret = new UInt16 [1];
 
+                //Todo, sanity check results differ between byte pair and UInt16 representation
+                //need to figure out why
                 //_I2C.WriteRead(new byte[] { (byte)(pair >> 8), (byte)(pair & 0x0F) }, returnvalue);
                 _I2C.WriteRead(new ushort[] { pair }, ret);
                 if ((pair & 0x0F) != (ret[0]))
@@ -248,7 +251,8 @@ namespace NetduinoApplication1
         {
             _I2C = new MultiI2C(address, MAX_FREQ);
             Thread.Sleep(10);
-            Initialzie();
+            Initialize();
+            Thread.Sleep(10);
             Callibrate();
         }
 
@@ -258,15 +262,26 @@ namespace NetduinoApplication1
 
         public SensorData getSensorData()
         {
-            byte[] buffer = new byte[14];
+            byte[] inbuffer =  {MPU6050_RA_ACCEL_XOUT_H ,  MPU6050_RA_ACCEL_XOUT_L ,  MPU6050_RA_ACCEL_YOUT_H, MPU6050_RA_ACCEL_YOUT_L  ,
+                                 MPU6050_RA_ACCEL_ZOUT_H   , MPU6050_RA_ACCEL_ZOUT_L , MPU6050_RA_TEMP_OUT_H ,
+                                 MPU6050_RA_TEMP_OUT_L  , MPU6050_RA_GYRO_XOUT_H   , MPU6050_RA_GYRO_XOUT_L   ,
+                                 MPU6050_RA_GYRO_YOUT_H  , MPU6050_RA_GYRO_YOUT_L  , MPU6050_RA_GYRO_ZOUT_H  , MPU6050_RA_GYRO_ZOUT_L };
 
-            buffer[0] = 0x3B;
+            byte[] outbuffer = new byte[inbuffer.Length];
 
-            _I2C.Write(new byte[] { buffer[0] });
+            //Read the 14 bytes starting from this register: XH/L, YH/L, XY/L, TempH/L, GyroH/L(x,y,z)
 
-            _I2C.Read(buffer);
 
-            return new SensorData(buffer, GyroOffsets);
+            for (int i = 0; i < outbuffer.Length; i++)
+            {
+                byte [] outb = new byte [1];
+                _I2C.Write(new byte [] {inbuffer[i]});
+                _I2C.Read(outb);
+                outbuffer[i] = outb[0];
+
+            }
+
+            return new SensorData(outbuffer, GyroOffsets, false);
         }
 
 
