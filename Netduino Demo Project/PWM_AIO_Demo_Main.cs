@@ -157,11 +157,11 @@ namespace NetduinoApplication1
 
             while (true)
             {
-                Thread.Sleep(1000);
+                Thread.Sleep(1);
                 imuData = imu.getSensorData();
 
-                Debug.Print("X Y Z    " + imuData.Gyroscope_X.ToString() + " " + imuData.Gyroscope_Y.ToString() + " " + imuData.Gyroscope_Z.ToString());
-                Debug.Print("X' Y' Z' " + imuData.Acceleration_X.ToString() + " " + imuData.Acceleration_Y.ToString() + " " + imuData.Acceleration_Z.ToString());
+                Debug.Print("X Y Z X' Y' Z' " + imuData.Gyroscope_X.ToString() + " " + imuData.Gyroscope_Y.ToString() + " " + imuData.Gyroscope_Z.ToString() + " " + imuData.Acceleration_X.ToString() + " " + imuData.Acceleration_Y.ToString() + " " + imuData.Acceleration_Z.ToString());
+
             }
 
 
